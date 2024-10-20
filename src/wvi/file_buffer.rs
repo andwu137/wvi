@@ -4,7 +4,7 @@ use std::{
 };
 
 pub struct FileBuffer {
-    file: Vec<Vec<char>>,
+    pub file: Vec<Vec<char>>,
 }
 
 //file_buffer::load_file(&name).unwrap()
