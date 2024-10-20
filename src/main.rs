@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use device_query::DeviceEvents;
-use device_query::{self, Keycode};
+use device_query::Keycode;
 use wvi::file_buffer::FileBuffer;
 use wvi::input::{Input, InputParser};
 

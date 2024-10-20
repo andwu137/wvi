@@ -1,5 +1,5 @@
 use super::file_buffer::FileBuffer;
-use device_query::{self, Keycode};
+use device_query::Keycode;
 
 type Command = dyn Fn(&mut FileBuffer) -> std::io::Result<()> + Sync + Send;
 
