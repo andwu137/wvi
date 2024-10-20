@@ -28,8 +28,8 @@ impl V2 {
 
     fn clamp(&self, v_mx: &V2) -> V2 {
         V2 {
-            x: std::cmp::min(self.x, v_mx.x),
-            y: std::cmp::min(self.y, v_mx.y),
+            x: self.x.min(v_mx.x),
+            y: self.y.min(v_mx.y),
         }
     }
 }
