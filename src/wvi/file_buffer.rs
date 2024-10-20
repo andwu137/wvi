@@ -7,25 +7,23 @@ pub struct FileBuffer {
     pub file: Vec<Vec<char>>,
 }
 
-//file_buffer::load_file(&name).unwrap()
-pub fn load_file(name: &String) -> std::io::Result<FileBuffer> {
-    let f = File::open(name)?;
-    let lines = BufReader::new(f)
-        .lines()
-        .flat_map(|line| line.map(|l| l.chars().collect::<Vec<char>>()))
-        .collect();
-    Ok(FileBuffer { file: lines })
-}
+impl FileBuffer {
+    //file_buffer::load_file(&name).unwrap()
+    pub fn load_file<R>(name: R) -> std::io::Result<FileBuffer>
+    where
+        R: AsRef<std::path::Path>,
+    {
+        let f = File::open(name)?;
+        let lines = BufReader::new(f)
+            .lines()
+            .flat_map(|line| line.map(|l| l.chars().collect::<Vec<char>>()))
+            .collect();
+        Ok(FileBuffer { file: lines })
+    }
 
-//file_buffer::write_file(&name, &file_buffer).unwrap().unwrap();
-pub fn write_file(
-    name: &String,
-    buf: &FileBuffer,
-) -> Result<std::io::Result<()>, std::string::FromUtf8Error> {
-    Ok(std::fs::write(
-        name,
+    pub fn write_file(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(
-            buf.file
+            self.file
                 .iter()
                 .flat_map(|l| {
                     l.into_iter()
@@ -37,6 +35,10 @@ pub fn write_file(
                         .chain(std::iter::once(b'\n'))
                 })
                 .collect::<Vec<_>>(),
-        )?,
-    ))
+        )
+    }
+
+    pub fn append(&mut self, newline: Vec<char>) {
+        self.file.append(&mut vec![newline]);
+    }
 }
