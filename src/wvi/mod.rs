@@ -1,4 +1,5 @@
 mod buffer_map;
-mod file_buffer;
+pub mod file_buffer;
+pub mod input;
 mod modes;
 pub mod window;
