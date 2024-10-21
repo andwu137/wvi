@@ -24,10 +24,10 @@ impl Normal {
     }
 
     fn display_cursor(&self, buf: &FileBuffer) -> V2 {
-        assert!(self.cursor.y >= buf.file.len());
+        assert!(self.cursor.y >= buf.len());
         V2::clamp(
             &self.cursor,
-            &V2::new(buf.file[self.cursor.y].len(), self.cursor.y),
+            &V2::new(buf.line_len(self.cursor.y).unwrap(), self.cursor.y),
         )
     }
 }

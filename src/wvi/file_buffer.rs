@@ -4,10 +4,34 @@ use std::{
 };
 
 pub struct FileBuffer {
-    pub file: Vec<Vec<char>>,
+    file: Vec<Vec<char>>,
 }
 
 impl FileBuffer {
+    pub fn len(&self) -> usize {
+        self.file.len()
+    }
+
+    pub fn line_len(&self, y: usize) -> Option<usize> {
+        self.file.get(y).map(|l| l.len())
+    }
+
+    pub fn get_line(&self, y: usize) -> Option<&Vec<char>> {
+        self.file.get(y)
+    }
+
+    pub fn get_line_mut(&mut self, y: usize) -> Option<&mut Vec<char>> {
+        self.file.get_mut(y)
+    }
+
+    pub fn get(&self, y: usize, x: usize) -> Option<&char> {
+        self.get_line(y)?.get(x)
+    }
+
+    pub fn get_mut(&mut self, y: usize, x: usize) -> Option<&mut char> {
+        self.get_line_mut(y)?.get_mut(x)
+    }
+
     //file_buffer::load_file(&name).unwrap()
     pub fn load_file<R>(name: R) -> std::io::Result<FileBuffer>
     where
