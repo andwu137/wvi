@@ -1,133 +1,123 @@
 use super::file_buffer::FileBuffer;
 use device_query::Keycode;
+use std::collections;
 
 type Command = dyn Fn(&mut FileBuffer) -> std::io::Result<()> + Sync + Send;
 
-pub struct Input<'a> {
-    input_buf: Vec<Keycode>,
-    parsers: Vec<InputParser<'a>>,
-    parser_num: usize,
-    _private: (),
+pub struct Parser<'a> {
+    keys: Vec<Keycode>,
+    command: &'a Command,
 }
 
-impl<'a> Input<'a> {
-    pub fn new(parsers: Vec<InputParser<'a>>) -> Input<'a> {
-        Input {
-            input_buf: vec![],
-            parsers,
-            parser_num: 0,
-            _private: (),
+impl<'a> Parser<'a> {
+    pub fn new(ks: Vec<Keycode>, c: &'a Command) -> Parser<'a> {
+        Parser {
+            keys: ks,
+            command: c,
         }
-    }
-
-    pub fn run(&mut self, buf: &mut FileBuffer, key: &Keycode) -> std::io::Result<()> {
-        self.input_buf.push(key.clone());
-        self.parse(buf, key)
-    }
-
-    fn parse(&mut self, buf: &mut FileBuffer, key: &Keycode) -> std::io::Result<()> {
-        loop {
-            match self.parsers[self.parser_num].parse(key) {
-                Result::Command(c) => {
-                    c(buf)?;
-                    self.reset();
-                    return Ok(());
-                }
-                Result::Continue => return Ok(()),
-                Result::Fail => {
-                    if !self.next_parser(buf)? {
-                        self.reset();
-                        return Ok(());
-                    }
-                }
-            }
-        }
-    }
-
-    // returns true if success
-    fn reparse(&mut self, buf: &mut FileBuffer) -> std::io::Result<bool> {
-        for k in self
-            .input_buf
-            .clone()
-            .iter()
-            .take(self.input_buf.len().saturating_sub(1))
-        {
-            match self.parsers[self.parser_num].parse(&k) {
-                Result::Command(c) => {
-                    c(buf)?;
-                    // we must have parsed all the input_buf
-                    self.reset();
-                    return Ok(true);
-                }
-                Result::Fail => return Ok(false),
-                Result::Continue => {}
-            }
-        }
-        Ok(true)
-    }
-
-    // returns false if there are no more parsers
-    fn next_parser(&mut self, buf: &mut FileBuffer) -> std::io::Result<bool> {
-        self.parser_num = self.parser_num + 1;
-        if self.parser_num >= self.parsers.len() {
-            self.reset();
-            Ok(false)
-        } else if !self.reparse(buf)? {
-            self.next_parser(buf)
-        } else {
-            Ok(true)
-        }
-    }
-
-    fn reset(&mut self) {
-        self.parser_num = 0;
-        self.input_buf.clear();
     }
 }
 
 pub struct InputParser<'a> {
-    parse_target: Vec<Keycode>,
-    pos: usize,
-    command: &'a Command,
-}
-
-enum Result<'a> {
-    Command(&'a Command),
-    Continue,
-    Fail,
+    input_buf: Vec<Keycode>,
+    parser: ParserTree<'a>,
 }
 
 impl<'a> InputParser<'a> {
-    pub fn new(t: Vec<Keycode>, c: &'a Command) -> InputParser {
+    pub fn new(parsers: Vec<Parser<'a>>) -> InputParser<'a> {
+        let mut parser_tree = ParserTree::new();
+        for p in parsers {
+            parser_tree.add(p);
+        }
+
         InputParser {
-            parse_target: t,
-            pos: 0,
-            command: c,
+            input_buf: Vec::new(),
+            parser: parser_tree,
         }
     }
 
-    fn parse(&mut self, k: &Keycode) -> Result {
-        let (curr_k, done) = self.next();
-        if curr_k != *k {
-            self.reset();
-            return Result::Fail;
-        }
-
-        if done {
-            self.reset();
-            Result::Command(self.command)
-        } else {
-            Result::Continue
+    pub fn accept(
+        &mut self,
+        key: Keycode,
+        buf: &mut FileBuffer,
+    ) -> std::io::Result<Option<Vec<Keycode>>> {
+        self.input_buf.push(key);
+        // NOTE: naive
+        let result = self
+            .parser
+            .run_command(self.input_buf.clone().into_iter(), buf);
+        match result {
+            ParseState::Failed => Ok(Some(self.reset())),
+            ParseState::Unfinished => Ok(None),
+            ParseState::Success(r) => {
+                self.reset();
+                r.map(|_| None)
+            }
         }
     }
 
-    fn next(&mut self) -> (Keycode, bool) {
-        let x = self.parse_target[self.pos];
-        self.pos += 1;
-        (x, self.pos == self.parse_target.len())
+    pub fn reset(&mut self) -> Vec<Keycode> {
+        let r = self.input_buf.clone();
+        self.input_buf.clear();
+        r
+    }
+}
+
+enum ParserTree<'a> {
+    Finished(&'a Command),
+    Branch(collections::HashMap<Keycode, ParserTree<'a>>),
+}
+
+enum ParseState<T> {
+    Failed,
+    Unfinished,
+    Success(T),
+}
+
+impl<'a> ParserTree<'a> {
+    fn new() -> ParserTree<'a> {
+        ParserTree::Branch(collections::HashMap::new())
     }
 
-    fn reset(&mut self) {
-        self.pos = 0;
+    pub fn add(&mut self, parser: Parser<'a>) -> bool {
+        let mut p = self;
+        for k in parser.keys {
+            match p {
+                ParserTree::Finished(_) => return false,
+                ParserTree::Branch(h) => {
+                    p = h.entry(k).or_insert_with(ParserTree::new);
+                }
+            }
+        }
+
+        match p {
+            ParserTree::Finished(_) => false,
+            ParserTree::Branch(_) => {
+                *p = ParserTree::Finished(parser.command);
+                true
+            }
+        }
+    }
+
+    pub fn run_command(
+        &mut self,
+        keys: impl Iterator<Item = Keycode>,
+        buf: &mut FileBuffer,
+    ) -> ParseState<std::io::Result<()>> {
+        let mut p = self;
+        for k in keys {
+            dbg!(k);
+            if let ParserTree::Branch(h) = p {
+                match h.get_mut(&k) {
+                    None => return ParseState::Failed,
+                    Some(t) => p = t,
+                }
+            }
+        }
+
+        match p {
+            ParserTree::Finished(c) => ParseState::Success(c(buf)),
+            ParserTree::Branch(_) => ParseState::Unfinished,
+        }
     }
 }

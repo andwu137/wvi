@@ -1,11 +1,12 @@
 mod wvi;
-use std::sync::Mutex;
-use std::time::Duration;
 
 use device_query::DeviceEvents;
 use device_query::Keycode;
+use std::sync::Mutex;
+use std::time::Duration;
 use wvi::file_buffer::FileBuffer;
-use wvi::input::{Input, InputParser};
+use wvi::input::InputParser;
+use wvi::input::Parser;
 
 const FILE: &str = "test_inputs/random_file.txt";
 
@@ -38,22 +39,27 @@ fn main() -> std::io::Result<()> {
     let search_keys = vec![Keycode::Space, Keycode::S, Keycode::F];
     let switch_keys = vec![Keycode::Space, Keycode::H, Keycode::F];
     let write_keys = vec![Keycode::Space, Keycode::F, Keycode::W];
+    let override_write_keys = vec![Keycode::Space, Keycode::F];
 
-    let write = InputParser::new(write_keys, &write);
-    let s = InputParser::new(search_keys, &search);
-    let h = InputParser::new(switch_keys, &switch);
+    let parsers = vec![
+        Parser::new(write_keys, &write),
+        Parser::new(search_keys, &search),
+        Parser::new(override_write_keys, &write),
+        Parser::new(switch_keys, &switch),
+    ];
 
-    let input_mutex = Mutex::new(Input::new(vec![write, s, h]));
+    let parser_mutex = Mutex::new(InputParser::new(parsers));
 
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
     let _guard = device_state.on_key_down(move |key| {
-        let mut data = input_mutex.lock().unwrap();
+        let mut parser = parser_mutex.lock().unwrap();
         let mut buf = buf_mutex.lock().unwrap();
         println!("Keyboard key down: {:#?}", key);
-        match data.run(&mut (*buf), key) {
+        match parser.accept(*key, &mut (*buf)) {
             Err(e) => println!("{}", e),
-            Ok(()) => {}
+            Ok(None) => {}
+            Ok(Some(failed)) => println!("{:?}", failed),
         }
     });
 
