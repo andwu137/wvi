@@ -7,7 +7,7 @@ use device_query::Keycode;
 use wvi::file_buffer::FileBuffer;
 use wvi::input::{Input, InputParser};
 
-const FILE: &str = "test_file";
+const FILE: &str = "test_inputs/random_file.txt";
 
 fn search(buf: &mut FileBuffer) -> std::io::Result<()> {
     let msg = "search";
@@ -51,7 +51,10 @@ fn main() -> std::io::Result<()> {
         let mut data = input_mutex.lock().unwrap();
         let mut buf = buf_mutex.lock().unwrap();
         println!("Keyboard key down: {:#?}", key);
-        data.run(&mut (*buf), key);
+        match data.run(&mut (*buf), key) {
+            Err(e) => println!("{}", e),
+            Ok(()) => {}
+        }
     });
 
     loop {

@@ -20,32 +20,24 @@ impl<'a> Input<'a> {
         }
     }
 
-    pub fn run(&mut self, buf: &mut FileBuffer, key: &Keycode) {
+    pub fn run(&mut self, buf: &mut FileBuffer, key: &Keycode) -> std::io::Result<()> {
         self.input_buf.push(key.clone());
-        dbg!(key);
-        self.parse(buf, key);
-        dbg!(
-            &self.input_buf,
-            self.parser_num,
-            self.parsers[self.parser_num].pos
-        );
-        println!("\n\n");
+        self.parse(buf, key)
     }
 
-    fn parse(&mut self, buf: &mut FileBuffer, key: &Keycode) {
+    fn parse(&mut self, buf: &mut FileBuffer, key: &Keycode) -> std::io::Result<()> {
         loop {
-            println!("hi");
             match self.parsers[self.parser_num].parse(key) {
                 Result::Command(c) => {
-                    c(buf);
+                    c(buf)?;
                     self.reset();
-                    return;
+                    return Ok(());
                 }
-                Result::Continue => return,
+                Result::Continue => return Ok(()),
                 Result::Fail => {
-                    if !self.next_parser(buf) {
+                    if !self.next_parser(buf)? {
                         self.reset();
-                        return;
+                        return Ok(());
                     }
                 }
             }
@@ -53,7 +45,7 @@ impl<'a> Input<'a> {
     }
 
     // returns true if success
-    fn reparse(&mut self, buf: &mut FileBuffer) -> bool {
+    fn reparse(&mut self, buf: &mut FileBuffer) -> std::io::Result<bool> {
         for k in self
             .input_buf
             .clone()
@@ -62,28 +54,28 @@ impl<'a> Input<'a> {
         {
             match self.parsers[self.parser_num].parse(&k) {
                 Result::Command(c) => {
-                    c(buf);
+                    c(buf)?;
                     // we must have parsed all the input_buf
                     self.reset();
-                    return true;
+                    return Ok(true);
                 }
-                Result::Fail => return false,
+                Result::Fail => return Ok(false),
                 Result::Continue => {}
             }
         }
-        true
+        Ok(true)
     }
 
     // returns false if there are no more parsers
-    fn next_parser(&mut self, buf: &mut FileBuffer) -> bool {
+    fn next_parser(&mut self, buf: &mut FileBuffer) -> std::io::Result<bool> {
         self.parser_num = self.parser_num + 1;
         if self.parser_num >= self.parsers.len() {
             self.reset();
-            false
-        } else if !self.reparse(buf) {
+            Ok(false)
+        } else if !self.reparse(buf)? {
             self.next_parser(buf)
         } else {
-            true
+            Ok(true)
         }
     }
 
@@ -115,7 +107,6 @@ impl<'a> InputParser<'a> {
     }
 
     fn parse(&mut self, k: &Keycode) -> Result {
-        dbg!(&self.parse_target, self.pos);
         let (curr_k, done) = self.next();
         if curr_k != *k {
             self.reset();
