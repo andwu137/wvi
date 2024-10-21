@@ -42,18 +42,22 @@ fn main() -> std::io::Result<()> {
     let override_write_keys = vec![Keycode::Space, Keycode::F];
 
     let parsers = vec![
-        Parser::new(write_keys, &write),
-        Parser::new(search_keys, &search),
-        Parser::new(override_write_keys, &write),
-        Parser::new(switch_keys, &switch),
+        Parser::new(write_keys, &write).unwrap(),
+        Parser::new(search_keys, &search).unwrap(),
+        Parser::new(override_write_keys.clone(), &write).unwrap(),
+        Parser::new(switch_keys, &switch).unwrap(),
     ];
 
     let parser_mutex = Mutex::new(InputParser::new(parsers));
+    {
+        let mut parser = parser_mutex.lock().unwrap();
+        parser.remove(&override_write_keys);
+    }
 
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
     let _guard = device_state.on_key_down(move |key| {
-        let mut parser = parser_mutex.lock().unwrap();
+        let mut parser = parser_mutex.lock().unwrap(); // WARN: unwrap
         let mut buf = buf_mutex.lock().unwrap();
         println!("Keyboard key down: {:#?}", key);
         match parser.accept(*key, &mut (*buf)) {
