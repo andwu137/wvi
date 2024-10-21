@@ -11,10 +11,10 @@ pub struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    pub fn new(ib: Vec<Keycode>, p: Vec<InputParser<'a>>) -> Input<'a> {
+    pub fn new(parsers: Vec<InputParser<'a>>) -> Input<'a> {
         Input {
-            input_buf: ib,
-            parsers: p,
+            input_buf: vec![],
+            parsers,
             parser_num: 0,
             _private: (),
         }

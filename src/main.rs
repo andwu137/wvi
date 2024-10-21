@@ -43,7 +43,7 @@ fn main() -> std::io::Result<()> {
     let s = InputParser::new(search_keys, &search);
     let h = InputParser::new(switch_keys, &switch);
 
-    let input_mutex = Mutex::new(Input::new(vec![], vec![write, s, h]));
+    let input_mutex = Mutex::new(Input::new(vec![write, s, h]));
 
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
