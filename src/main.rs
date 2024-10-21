@@ -3,6 +3,8 @@ mod wvi;
 use device_query::DeviceEvents;
 use device_query::Keycode;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::PoisonError;
 use std::time::Duration;
 use wvi::file_buffer::FileBuffer;
 use wvi::input::InputParser;
@@ -33,6 +35,28 @@ fn write(buf: &mut FileBuffer) -> std::io::Result<()> {
     )
 }
 
+fn block_lock<T>(
+    m: &Mutex<T>,
+    max_tries: usize,
+    delay: Duration,
+    on_error: fn(PoisonError<MutexGuard<'_, T>>),
+) -> Option<MutexGuard<T>> {
+    for _ in 1..max_tries {
+        let result = m.lock();
+        match result {
+            Err(e) => on_error(e),
+            Ok(guard) => return Some(guard),
+        }
+        std::thread::sleep(delay);
+    }
+
+    None
+}
+
+fn default_block_lock<T>(m: &Mutex<T>) -> Option<MutexGuard<T>> {
+    block_lock(m, 100_000, Duration::new(0, 100_000), |e| println!("{}", e))
+}
+
 fn main() -> std::io::Result<()> {
     let device_state = device_query::DeviceState::new();
 
@@ -57,8 +81,8 @@ fn main() -> std::io::Result<()> {
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
     let _guard = device_state.on_key_down(move |key| {
-        let mut parser = parser_mutex.lock().unwrap(); // WARN: unwrap
-        let mut buf = buf_mutex.lock().unwrap();
+        let mut parser = default_block_lock(&parser_mutex).unwrap();
+        let mut buf = default_block_lock(&buf_mutex).unwrap();
         println!("Keyboard key down: {:#?}", key);
         match parser.accept(*key, &mut (*buf)) {
             Err(e) => println!("{}", e),
