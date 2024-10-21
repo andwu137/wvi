@@ -42,10 +42,10 @@ fn main() -> std::io::Result<()> {
     let override_write_keys = vec![Keycode::Space, Keycode::F];
 
     let parsers = vec![
-        Parser::new(write_keys, &write).unwrap(),
-        Parser::new(search_keys, &search).unwrap(),
-        Parser::new(override_write_keys.clone(), &write).unwrap(),
-        Parser::new(switch_keys, &switch).unwrap(),
+        Parser::new(write_keys, write).unwrap(),
+        Parser::new(search_keys, search).unwrap(),
+        Parser::new(override_write_keys.clone(), write).unwrap(),
+        Parser::new(switch_keys, switch).unwrap(),
     ];
 
     let parser_mutex = Mutex::new(InputParser::new(parsers));

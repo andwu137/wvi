@@ -2,15 +2,15 @@ use super::file_buffer::FileBuffer;
 use device_query::Keycode;
 use std::collections::{HashMap, VecDeque};
 
-type Command = dyn Fn(&mut FileBuffer) -> std::io::Result<()> + Sync + Send;
+type Command = fn(&mut FileBuffer) -> std::io::Result<()>;
 
-pub struct Parser<'a> {
+pub struct Parser {
     keys: Vec<Keycode>,
-    command: &'a Command,
+    command: Command,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(ks: Vec<Keycode>, c: &'a Command) -> Option<Parser<'a>> {
+impl Parser {
+    pub fn new(ks: Vec<Keycode>, c: Command) -> Option<Parser> {
         if 0 < ks.len() {
             Some(Parser {
                 keys: ks,
@@ -22,13 +22,13 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub struct InputParser<'a> {
+pub struct InputParser {
     input_buf: Vec<Keycode>,
-    parser: ParserTree<'a>,
+    parser: ParserTree,
 }
 
-impl<'a> InputParser<'a> {
-    pub fn new(parsers: Vec<Parser<'a>>) -> InputParser<'a> {
+impl InputParser {
+    pub fn new(parsers: Vec<Parser>) -> InputParser {
         let mut parser_tree = ParserTree::new();
         for p in parsers {
             parser_tree.add(p);
@@ -49,13 +49,16 @@ impl<'a> InputParser<'a> {
         // NOTE: naive
         let result = self
             .parser
-            .run_commands(self.input_buf.clone().into_iter(), buf);
+            .get_commands_at(self.input_buf.clone().into_iter());
         match result {
             ParseState::Failed => Ok(Some(self.reset())),
             ParseState::Unfinished => Ok(None),
-            ParseState::Success(r) => {
+            ParseState::Success(commands) => {
+                for c in commands {
+                    c(buf)?;
+                }
                 self.reset();
-                r.map(|_| None)
+                Ok(None)
             }
         }
     }
@@ -71,9 +74,9 @@ impl<'a> InputParser<'a> {
     }
 }
 
-struct ParserTree<'a> {
-    commands: VecDeque<&'a Command>,
-    children: HashMap<Keycode, ParserTree<'a>>,
+struct ParserTree {
+    commands: VecDeque<Command>,
+    children: HashMap<Keycode, ParserTree>,
 }
 
 enum ParseState<T> {
@@ -82,8 +85,8 @@ enum ParseState<T> {
     Success(T),
 }
 
-impl<'a> ParserTree<'a> {
-    fn new() -> ParserTree<'a> {
+impl ParserTree {
+    fn new() -> ParserTree {
         ParserTree {
             commands: VecDeque::new(),
             children: HashMap::new(),
@@ -109,11 +112,11 @@ impl<'a> ParserTree<'a> {
         self.commands.len() == 0 && self.children.len() == 0
     }
 
-    fn add_command(&mut self, c: &'a Command) {
+    fn add_command(&mut self, c: Command) {
         self.commands.push_back(c)
     }
 
-    pub fn add(&mut self, parser: Parser<'a>) {
+    pub fn add(&mut self, parser: Parser) {
         let mut parser_tree = self;
         for k in parser.keys {
             println!("{}", k);
@@ -146,11 +149,10 @@ impl<'a> ParserTree<'a> {
         }
     }
 
-    pub fn run_commands(
+    pub fn get_commands_at(
         &mut self,
         keys: impl Iterator<Item = Keycode>,
-        buf: &mut FileBuffer,
-    ) -> ParseState<std::io::Result<()>> {
+    ) -> ParseState<&VecDeque<Command>> {
         let mut parser_tree = self;
         for k in keys {
             dbg!(k);
@@ -165,14 +167,7 @@ impl<'a> ParserTree<'a> {
         } else if parser_tree.commands.len() == 0 {
             ParseState::Unfinished
         } else {
-            ParseState::Success(parser_tree.run_commands_top(buf))
+            ParseState::Success(&parser_tree.commands)
         }
-    }
-
-    fn run_commands_top(&mut self, buf: &mut FileBuffer) -> std::io::Result<()> {
-        for c in &self.commands {
-            c(buf)?;
-        }
-        Ok(())
     }
 }
