@@ -32,6 +32,14 @@ impl V2 {
             y: self.y.min(v_mx.y),
         }
     }
+
+    fn clamp_x(&self, x_mx: usize) -> V2 {
+        self.clamp(&V2::new(x_mx, self.y))
+    }
+
+    fn clamp_y(&self, y_mx: usize) -> V2 {
+        self.clamp(&V2::new(self.x, y_mx))
+    }
 }
 
 #[derive(Eq, PartialEq)]
