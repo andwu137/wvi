@@ -1,6 +1,6 @@
 use std::sync::{LazyLock, Mutex};
 
-use super::{mode_utils, Mode, ModeInit};
+use super::{mode_utils, Mode};
 use crate::wvi::file_buffer::FileBuffer;
 use crate::wvi::input::{Command, InputParser, ParseState, Parser};
 use crate::wvi::modes::{Dir2, V2};
@@ -24,12 +24,6 @@ pub struct Insert {
 }
 
 impl Mode for Insert {
-    fn new(init: ModeInit) -> Insert {
-        Insert {
-            cursor: init.cursor_pos,
-        }
-    }
-
     fn accept(
         &mut self,
         buf: &mut FileBuffer,
@@ -42,6 +36,10 @@ impl Mode for Insert {
 }
 
 impl Insert {
+    pub fn new(cursor_pos: V2) -> Insert {
+        Insert { cursor: cursor_pos }
+    }
+
     fn move_cursor_curry(dir: Dir2) -> Command<Insert> {
         Box::new(move |mode, buf| {
             //println!("");

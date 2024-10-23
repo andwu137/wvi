@@ -7,7 +7,7 @@ use wvi::file_buffer::FileBuffer;
 use wvi::input::{InputParser, ParseState, Parser};
 use wvi::modes::insert::Insert;
 use wvi::modes::normal::Normal;
-use wvi::modes::{BoxMode, Mode, ModeInit, V2};
+use wvi::modes::{BoxMode, V2};
 
 const FILE: &str = "test_inputs/random_file.txt";
 
@@ -80,14 +80,10 @@ fn main() -> std::io::Result<()> {
 
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
-    let mode_mutex: Mutex<BoxMode> = Mutex::new(Box::new(Normal::new(ModeInit {
-        cursor_pos: V2::new(0, 0),
-    })));
+    let mode_mutex: Mutex<BoxMode> = Mutex::new(Box::new(Normal::new(V2::new(0, 0))));
     {
         let mut mode = mode_mutex.lock().unwrap();
-        *mode = Box::new(Insert::new(ModeInit {
-            cursor_pos: V2::new(0, 0),
-        }));
+        *mode = Box::new(Insert::new(V2::new(0, 0)));
     }
 
     let _guard = device_state.on_key_down(move |key| {

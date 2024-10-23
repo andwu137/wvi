@@ -1,7 +1,7 @@
 use std::sync::{LazyLock, Mutex};
 
 use super::mode_utils;
-use super::{Mode, ModeInit};
+use super::Mode;
 use crate::wvi::file_buffer::FileBuffer;
 use crate::wvi::input::{Command, InputParser, ParseState, Parser};
 use crate::wvi::modes::{Dir2, V2};
@@ -25,12 +25,6 @@ pub struct Normal {
 }
 
 impl Mode for Normal {
-    fn new(init: ModeInit) -> Normal {
-        Normal {
-            cursor: init.cursor_pos,
-        }
-    }
-
     fn accept(
         &mut self,
         buf: &mut FileBuffer,
@@ -43,6 +37,10 @@ impl Mode for Normal {
 }
 
 impl Normal {
+    pub fn new(cursor_pos: V2) -> Normal {
+        Normal { cursor: cursor_pos }
+    }
+
     fn move_cursor_curry(dir: Dir2) -> Command<Normal> {
         Box::new(move |mode, buf| {
             println!("{:?}", dir);

@@ -8,16 +8,7 @@ use device_query::Keycode;
 
 pub type BoxMode = Box<dyn Mode + Send + Sync>;
 
-#[derive(Debug)]
-pub struct ModeInit {
-    pub cursor_pos: V2,
-}
-
 pub trait Mode {
-    fn new(init: ModeInit) -> Self
-    where
-        Self: Sized;
-
     fn accept(
         &mut self,
         buf: &mut FileBuffer,
