@@ -1,39 +1,61 @@
-use crate::wvi::file_buffer::FileBuffer;
-use crate::wvi::modes::{Direction, V2};
+use std::sync::{LazyLock, Mutex};
 
-struct Normal {
+use super::mode_utils;
+use super::{Mode, ModeInit};
+use crate::wvi::file_buffer::FileBuffer;
+use crate::wvi::input::{Command, InputParser, ParseState, Parser};
+use crate::wvi::modes::{Dir2, V2};
+use device_query::Keycode;
+
+static PARSER: LazyLock<Mutex<InputParser<Normal>>> = LazyLock::new(|| {
+    Mutex::new(InputParser::new(
+        vec![
+            Parser::new(vec![Keycode::Q], Box::new(|_mode, _buf| Ok(()))).unwrap(),
+            Parser::new(vec![Keycode::H], Normal::move_cursor_curry(Dir2::Left)).unwrap(),
+            Parser::new(vec![Keycode::J], Normal::move_cursor_curry(Dir2::Down)).unwrap(),
+            Parser::new(vec![Keycode::K], Normal::move_cursor_curry(Dir2::Up)).unwrap(),
+            Parser::new(vec![Keycode::L], Normal::move_cursor_curry(Dir2::Right)).unwrap(),
+        ]
+        .into_iter(),
+    ))
+});
+
+pub struct Normal {
     cursor: V2,
 }
 
-impl Normal {
-    fn new(cursor_pos: V2) -> Normal {
-        Normal { cursor: cursor_pos }
+impl Mode for Normal {
+    fn new(init: ModeInit) -> Normal {
+        Normal {
+            cursor: init.cursor_pos,
+        }
     }
 
-    // cursor must remain in bounds,
-    // -> not go beyond rightmost character on that line
-    // -> not go beyond lowest line in buf
-    fn move_cursor(&mut self, buf: &FileBuffer, dir: Direction) {
-        self.cursor = match dir {
-            Direction::Up => self.cursor.sat_sub(&V2::new(0, 1)),
-            Direction::Down => self.cursor.add(&V2::new(0, 1)).clamp_y(buf.len()),
-            Direction::Left => self.display_cursor(buf).sat_sub(&V2::new(1, 0)),
-            Direction::Right => self
-                .display_cursor(buf)
-                .add(&V2::new(1, 0))
-                .clamp_x(buf.line_len(self.cursor.y).unwrap()),
-        };
+    fn accept(
+        &mut self,
+        buf: &mut FileBuffer,
+        key: Keycode,
+    ) -> std::io::Result<ParseState<(), Vec<Keycode>>> {
+        let mut p = PARSER.lock().unwrap(); // WARN: unwrap here
+        p.accept(key);
+        p.lookup(self, buf)
+    }
+}
 
-        assert!(self.cursor.y < buf.len());
+impl Normal {
+    fn move_cursor_curry(dir: Dir2) -> Command<Normal> {
+        Box::new(move |mode, buf| {
+            println!("{:?}", dir);
+            mode.move_cursor(buf, dir);
+            Ok(())
+        })
+    }
+
+    fn move_cursor(&mut self, buf: &FileBuffer, dir: Dir2) {
+        self.cursor = mode_utils::move_cursor(&self.cursor, buf, dir);
     }
 
     fn display_cursor(&self, buf: &FileBuffer) -> V2 {
-        assert!(self.cursor.y < buf.len());
-        let cur = self.cursor.clamp(&V2::new(
-            buf.line_len(self.cursor.y).unwrap(),
-            self.cursor.y,
-        ));
-        assert!(cur.y < buf.len());
-        cur
+        mode_utils::display_cursor(&self.cursor, buf)
     }
 }

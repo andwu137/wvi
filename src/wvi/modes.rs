@@ -1,32 +1,56 @@
-mod command;
-mod insert;
-mod normal;
+pub mod command;
+pub mod insert;
+pub mod mode_utils;
+pub mod normal;
 
-struct V2 {
+use super::{file_buffer::FileBuffer, input::ParseState};
+use device_query::Keycode;
+
+pub type BoxMode = Box<dyn Mode + Send + Sync>;
+
+#[derive(Debug)]
+pub struct ModeInit {
+    pub cursor_pos: V2,
+}
+
+pub trait Mode {
+    fn new(init: ModeInit) -> Self
+    where
+        Self: Sized;
+
+    fn accept(
+        &mut self,
+        buf: &mut FileBuffer,
+        key: Keycode,
+    ) -> std::io::Result<ParseState<(), Vec<Keycode>>>;
+}
+
+#[derive(Eq, PartialEq, Debug)]
+pub struct V2 {
     x: usize,
     y: usize,
 }
 
 impl V2 {
-    fn new(x: usize, y: usize) -> V2 {
+    pub fn new(x: usize, y: usize) -> V2 {
         V2 { x, y }
     }
 
-    fn add(&self, v: &V2) -> V2 {
+    pub fn add(&self, v: &V2) -> V2 {
         V2 {
             x: self.x + v.x,
             y: self.y + v.y,
         }
     }
 
-    fn sat_sub(&self, v: &V2) -> V2 {
+    pub fn sat_sub(&self, v: &V2) -> V2 {
         V2 {
             x: self.x.saturating_sub(v.x),
             y: self.y.saturating_sub(v.y),
         }
     }
 
-    fn clamp(&self, v_mx: &V2) -> V2 {
+    pub fn clamp(&self, v_mx: &V2) -> V2 {
         V2 {
             x: self.x.min(v_mx.x),
             y: self.y.min(v_mx.y),
@@ -42,8 +66,8 @@ impl V2 {
     }
 }
 
-#[derive(Eq, PartialEq)]
-enum Direction {
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum Dir2 {
     Up,
     Down,
     Left,

@@ -1,32 +1,31 @@
 mod wvi;
 
-use device_query::DeviceEvents;
-use device_query::Keycode;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
-use std::sync::PoisonError;
+use device_query::{DeviceEvents, Keycode};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 use wvi::file_buffer::FileBuffer;
-use wvi::input::InputParser;
-use wvi::input::Parser;
+use wvi::input::{InputParser, ParseState, Parser};
+use wvi::modes::insert::Insert;
+use wvi::modes::normal::Normal;
+use wvi::modes::{BoxMode, Mode, ModeInit, V2};
 
 const FILE: &str = "test_inputs/random_file.txt";
 
-fn search(buf: &mut FileBuffer) -> std::io::Result<()> {
+fn search<M>(_mode: &mut M, buf: &mut FileBuffer) -> std::io::Result<()> {
     let msg = "search";
     println!("{}", msg);
     buf.append(msg.chars().collect());
     Ok(())
 }
 
-fn switch(buf: &mut FileBuffer) -> std::io::Result<()> {
+fn switch<M>(_mode: &mut M, buf: &mut FileBuffer) -> std::io::Result<()> {
     let msg = "switch";
     println!("{}", msg);
     buf.append(msg.chars().collect());
     Ok(())
 }
 
-fn write(buf: &mut FileBuffer) -> std::io::Result<()> {
+fn write<M>(_mode: &mut M, buf: &mut FileBuffer) -> std::io::Result<()> {
     println!("{}", FILE);
     std::fs::write(
         FILE,
@@ -66,29 +65,54 @@ fn main() -> std::io::Result<()> {
     let override_write_keys = vec![Keycode::Space, Keycode::F];
 
     let parsers = vec![
-        Parser::new(write_keys, write).unwrap(),
-        Parser::new(search_keys, search).unwrap(),
-        Parser::new(override_write_keys.clone(), write).unwrap(),
-        Parser::new(switch_keys, switch).unwrap(),
-    ];
+        Parser::new(write_keys, Box::new(write::<BoxMode>)).unwrap(),
+        Parser::new(search_keys, Box::new(search)).unwrap(),
+        Parser::new(override_write_keys.clone(), Box::new(write)).unwrap(),
+        Parser::new(switch_keys, Box::new(switch)).unwrap(),
+    ]
+    .into_iter();
 
-    let parser_mutex = Mutex::new(InputParser::new(parsers));
+    let main_parser_mutex: Mutex<InputParser<_>> = Mutex::new(InputParser::new(parsers));
     {
-        let mut parser = parser_mutex.lock().unwrap();
+        let mut parser = main_parser_mutex.lock().unwrap();
         parser.remove(&override_write_keys);
     }
 
     let buf_mutex = Mutex::new(FileBuffer::load_file(FILE)?);
 
+    let mode_mutex: Mutex<BoxMode> = Mutex::new(Box::new(Normal::new(ModeInit {
+        cursor_pos: V2::new(0, 0),
+    })));
+    {
+        let mut mode = mode_mutex.lock().unwrap();
+        *mode = Box::new(Insert::new(ModeInit {
+            cursor_pos: V2::new(0, 0),
+        }));
+    }
+
     let _guard = device_state.on_key_down(move |key| {
-        let mut parser = default_block_lock(&parser_mutex).unwrap();
         let mut buf = default_block_lock(&buf_mutex).unwrap();
+        let mut mode = default_block_lock(&mode_mutex).unwrap();
         println!("Keyboard key down: {:#?}", key);
-        match parser.accept(*key, &mut (*buf)) {
+        match mode.accept(&mut (*buf), *key) {
             Err(e) => println!("{}", e),
-            Ok(None) => {}
-            Ok(Some(failed)) => println!("{:?}", failed),
+            Ok(ParseState::Success(())) => {}
+            Ok(ParseState::Unfinished) => {}
+            Ok(ParseState::Failed(failed)) => {
+                println!("{:?}", failed);
+                let mut main_parser = default_block_lock(&main_parser_mutex).unwrap();
+                main_parser.accept_all(failed.into_iter());
+                match main_parser.lookup(&mut (*mode), &mut (*buf)) {
+                    Err(e) => println!("{}", e),
+                    Ok(ParseState::Success(())) => {}
+                    Ok(ParseState::Unfinished) => {}
+                    Ok(ParseState::Failed(failed)) => {
+                        println!("{:?}", failed)
+                    }
+                }
+            }
         }
+        //mode.display();
     });
 
     loop {
