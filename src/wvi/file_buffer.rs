@@ -24,8 +24,8 @@ impl FileBuffer {
         self.file.get_mut(y)
     }
 
-    pub fn get(&self, y: usize, x: usize) -> Option<&char> {
-        self.get_line(y)?.get(x)
+    pub fn get(&self, y: usize, x: usize) -> Option<char> {
+        self.get_line(y)?.get(x).map(|x| x.clone())
     }
 
     pub fn get_mut(&mut self, y: usize, x: usize) -> Option<&mut char> {
