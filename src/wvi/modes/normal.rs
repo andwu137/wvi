@@ -38,6 +38,8 @@ impl Mode for Normal {
 
 impl Normal {
     pub fn new(cursor_pos: V2) -> Normal {
+        let mut p = PARSER.lock().unwrap(); // WARN: unwrap here
+        p.reset();
         Normal { cursor: cursor_pos }
     }
 

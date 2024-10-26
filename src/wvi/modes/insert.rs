@@ -37,6 +37,8 @@ impl Mode for Insert {
 
 impl Insert {
     pub fn new(cursor_pos: V2) -> Insert {
+        let mut p = PARSER.lock().unwrap(); // WARN: unwrap here
+        p.reset();
         Insert { cursor: cursor_pos }
     }
 
